@@ -1,0 +1,19 @@
+{
+  "name": "llm-chat",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20",
+      "pnpmVersion": "none",
+      "nodeGypDependencies": false
+    },
+      "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+        "moby": false
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python"]
+    }
+  }
+}

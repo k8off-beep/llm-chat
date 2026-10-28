@@ -1,6 +1,7 @@
 {
   "name": "llm-chat",
   "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install -r agent/requirements.txt -r agent/requirements-dev.txt",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       "version": "20",

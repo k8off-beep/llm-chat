@@ -1,6 +1,7 @@
 import json
-import uuid
 import logging
+import os
+import uuid
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -8,6 +9,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.llm import stream_chat
+from app.tools import TOOLS, execute_tool
+
+
+SYSTEM_MESSAGE = {"role": "system",
+                  "content": "Ты полезный помощник. Отвечай на русском. "
+                  "Для поиска подматриц всегда используй инструмент find_submatrices."}
+MAX_LLM_CALLS = int(os.getenv("MAX_LLM_CALLS", "5"))
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -52,20 +60,49 @@ async def chat(request: ChatRequest):
     async def events():
         yield sse("start", {"run_id": run_id, "conversation_id": conversation_id})
         history = conversations[conversation_id]
-        messages = ([{"role": "system", "content": "Ты полезный помощник. Отвечай на русском."}]
-                    + history
-                    + [{"role": "user", "content": request.message}]
-                )
+
+        new_messages = [{"role": "user", "content": request.message}]
+
         try:
-            answer = ""
-            logger.info("run_id=%s conversation_id=%s сообщений в контексте: %d",
-                        run_id, conversation_id, len(messages))
-            async for chunk in stream_chat(messages):
-                answer += chunk
-                yield sse("delta", {"text": chunk})
-            history.append({"role": "user", "content": request.message})
-            history.append({"role": "assistant", "content": answer})
-            yield sse("done", {"status": "completed"})
+            for step in range(MAX_LLM_CALLS):
+                messages = [SYSTEM_MESSAGE] + history + new_messages
+                answer = ""
+                tool_calls = None
+
+                async for event in stream_chat(messages, tools=TOOLS):
+                    if event["type"] == "text":
+                        answer += event["text"]
+                        yield sse("delta", {"text": event["text"]})
+                    elif event["type"] == "tool_calls":
+                        tool_calls = event["tool_calls"]
+                if not tool_calls:
+                    new_messages.append({"role": "assistant", "content": answer})
+                    history.extend(new_messages)
+                    yield sse("done", {"status": "completed"})
+                    return
+
+                new_messages.append({
+                    "role": "assistant",
+                    "content": answer,
+                    "tool_calls":[
+                        {"id": c["id"], "type": "function",
+                        "function": {"name": c["name"], "arguments": c["arguments"]}}
+                        for c in tool_calls
+                    ],
+                })
+
+                for call in tool_calls:
+                    logger.info("run_id=%s модель вызвала %s, аргументы: %s",
+                                run_id, call["name"], call["arguments"])
+                    yield sse("tool", {"name": call["name"], "status": "running"})
+                    result = execute_tool(call["name"], call["arguments"])
+                    logger.info("result=%s", result)
+                    new_messages.append({"role": "tool", "tool_call_id": call["id"],
+                                        "content": json.dumps(result, ensure_ascii=False)})
+                    yield sse("tool", {"name": call["name"], "status": "done"})
+
+            yield sse("error", {"message": "Превышен лимит обращений к модели."})
+
         except httpx.HTTPError:
             logger.exception("Ошибка при обращении к модели, run_id=%s", run_id)
             yield sse("error", {"message": "Ошибка при обращении к модели."})

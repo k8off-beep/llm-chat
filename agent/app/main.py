@@ -1,11 +1,12 @@
-import asyncio
 import json
 import uuid
 
+import httpx
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.llm import stream_chat
 
 app = FastAPI()
 
@@ -34,10 +35,15 @@ async def chat(request: ChatRequest):
     run_id = str(uuid.uuid4())
     async def events():
         yield sse("start", {"run_id": run_id})
-        text = f"Вы написали: {request.message}. Это тестовый ответ без модели."
-        for word in text.split():
-            yield sse("delta", {"text": word + " "})
-            await asyncio.sleep(0.3)  
-        yield sse("done", {"status": "completed"})
+        messages = [
+            {"role": "system", "content": "Ты полезный помощник. Отвечай на русском."},
+            {"role": "user", "content": request.message},
+        ]
+        try:
+            async for chunk in stream_chat(messages):
+                yield sse("delta", {"text": chunk})
+            yield sse("done", {"status": "completed"})
+        except httpx.HTTPError as e:
+            yield sse("error", {"message": "Модель недоступна."})
 
     return StreamingResponse(events(), media_type="text/event-stream")

@@ -8,13 +8,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+
 from app.llm import stream_chat
+from app.prompts import SYSTEM_PROMPT
 from app.tools import TOOLS, execute_tool
 
 
-SYSTEM_MESSAGE = {"role": "system",
-                  "content": "Ты полезный помощник. Отвечай на русском. "
-                  "Для поиска подматриц всегда используй инструмент find_submatrices."}
+SYSTEM_MESSAGE = {"role": "system", "content": SYSTEM_PROMPT}
 MAX_LLM_CALLS = int(os.getenv("MAX_LLM_CALLS", "5"))
 
 logger = logging.getLogger("uvicorn.error")
@@ -60,6 +60,7 @@ async def chat(request: ChatRequest):
     async def events():
         yield sse("start", {"run_id": run_id, "conversation_id": conversation_id})
         history = conversations[conversation_id]
+        seen_calls = set()
 
         new_messages = [{"role": "user", "content": request.message}]
 
@@ -95,7 +96,15 @@ async def chat(request: ChatRequest):
                     logger.info("run_id=%s модель вызвала %s, аргументы: %s",
                                 run_id, call["name"], call["arguments"])
                     yield sse("tool", {"name": call["name"], "status": "running"})
-                    result = execute_tool(call["name"], call["arguments"])
+                    key = (call["name"], call["arguments"])
+                    if key in seen_calls:
+                        result = {
+                            "error": "duplicate_call",
+                            "message": "Этот вызов уже выполнен, его результат есть выше. Не вызывай инструмент снова — сформируй ответ.",
+                        }
+                    else:
+                        seen_calls.add(key)
+                        result = execute_tool(call["name"], call["arguments"])
                     logger.info("result=%s", result)
                     new_messages.append({"role": "tool", "tool_call_id": call["id"],
                                         "content": json.dumps(result, ensure_ascii=False)})

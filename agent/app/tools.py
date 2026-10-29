@@ -36,4 +36,8 @@ def execute_tool(name: str, arguments: str) -> dict:
     try:
         return find_submatrices(args.get("matrix"), args.get("pattern"))
     except SubmatrixValidationError as e:
-        return {"error": "validation_error", "message": str(e)}
+        return {
+            "error": "validation_error",
+            "message": str(e),
+            "hint": "Не вызывай инструмент повторно и не меняй данные. Объясни пользователю ошибку и попроси прислать исправленные данные.",
+        }

@@ -4,6 +4,8 @@ import json
 import httpx
 
 LLM_URL = os.getenv("LLM_URL", "http://host.docker.internal:8080")
+MAX_TOKENS = int(os.getenv("MAX_TOKENS", "1024"))
+TEMPERATURE = float(os.getenv("TEMPERATURE", "0"))
 
 
 async def stream_chat(messages: list[dict], tools=None):
@@ -16,7 +18,8 @@ async def stream_chat(messages: list[dict], tools=None):
     body = {
         "messages": messages,
         "stream": True,
-        "temperature": 0.2,
+        "temperature": TEMPERATURE,
+        "max_tokens" : MAX_TOKENS,
     }
     if tools:
         body["tools"] = tools

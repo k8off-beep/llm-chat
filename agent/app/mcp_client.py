@@ -51,7 +51,11 @@ async def call_mcp_tool(name: str, arguments: dict) -> dict:
         text = "\n".join(c.text for c in result.content if hasattr(c, "text"))
         if result.is_error:
             return {"error": "mcp_error", "message": text}
-        return {"result": text}
+        return {
+            "result": text,
+            "hint": "Покажи пользователю все строки результата с подписями столбцов. "
+                    "Не считай суммы и итоги сам: если итога нет в результате, не пиши его.",
+        }
     except TimeoutError:
         return {"error": "mcp_timeout", "message": "Превышено время ожидания."}
     except Exception:

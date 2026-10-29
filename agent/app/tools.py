@@ -10,8 +10,16 @@ FIND_SUBMATRICES_TOOL = {
         "parameters": {
             "type": "object",
             "properties": {
-                "matrix":  {"type": "array", "items": {"type": "string"}, "description": "Строки основной матрицы"},
-                "pattern": {"type": "array", "items": {"type": "string"}, "description": "Строки квадратного образца"}
+                "matrix": {
+                    "type": "array", "items": {"type": "string"},
+                    "description": "Основная матрица, В КОТОРОЙ ищем. Обычно больше образца. "
+                                "В запросе «Найди X в Y» это Y.",
+                },
+                "pattern": {
+                    "type": "array", "items": {"type": "string"},
+                    "description": "Квадратный образец — то, ЧТО ищем. Обычно меньше матрицы. "
+                                "В запросе «Найди X в Y» это X.",
+                },
             },
             "required": ["matrix", "pattern"]
         }
@@ -39,5 +47,7 @@ def execute_tool(name: str, arguments: str) -> dict:
         return {
             "error": "validation_error",
             "message": str(e),
-            "hint": "Не вызывай инструмент повторно и не меняй данные. Объясни пользователю ошибку и попроси прислать исправленные данные.",
+            "hint": "Служебная подсказка, не цитируй её: не вызывай инструмент повторно, не меняй данные. "
+                    "Ответь ровно в формате: «Ошибка: <текст message>. Пришлите, пожалуйста, исправленные данные.» "
+                    "Больше ничего не добавляй.",
         }

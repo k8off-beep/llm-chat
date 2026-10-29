@@ -6,6 +6,7 @@ import os
 import httpx
 
 from app.llm import stream_chat
+from app.mcp_client import ALLOWED_MCP_TOOLS, call_mcp_tool, list_mcp_tools
 from app.prompts import SYSTEM_PROMPT
 from app.tools import TOOLS, execute_tool
 
@@ -17,6 +18,7 @@ RUN_TIMEOUT = float(os.getenv("RUN_TIMEOUT", "120"))
 MAX_TOOL_CALLS = int(os.getenv("MAX_TOOL_CALLS", "5"))
 MAX_CONTEXT_CHARS = int(os.getenv("MAX_CONTEXT_CHARS", "16000"))
 
+
 async def run_agent(run_id: str, history: list[dict], user_message: str, emit) -> None:
     """Цикл агента: модель → инструменты → модель, пока не будет итогового ответа.
 
@@ -27,6 +29,12 @@ async def run_agent(run_id: str, history: list[dict], user_message: str, emit) -
 
     try:
         async with asyncio.timeout(RUN_TIMEOUT):
+            tools = list(TOOLS)
+            try:
+                tools += await list_mcp_tools()
+            except Exception:
+                logger.exception("run_id=%s не удалось получить инструменты MCP", run_id)
+
             tool_calls_count = 0
             for step in range(MAX_LLM_CALLS):
                 messages = [SYSTEM_MESSAGE] + history + new_messages
@@ -38,7 +46,7 @@ async def run_agent(run_id: str, history: list[dict], user_message: str, emit) -
                 tool_calls = None
                 reason = None
 
-                async for event in stream_chat(messages, tools=TOOLS):
+                async for event in stream_chat(messages, tools=tools):
                     if event["type"] == "text":
                         answer += event["text"]
                         emit("delta", {"text": event["text"]})
@@ -71,7 +79,7 @@ async def run_agent(run_id: str, history: list[dict], user_message: str, emit) -
                         return
                     logger.info("run_id=%s модель вызвала %s, аргументы: %s",
                                 run_id, call["name"], call["arguments"])
-                    emit("tool", {"name": call["name"], "status": "running"})
+                    emit("tool", {"name": call["name"], "status": "running", "arguments": call["arguments"]})
                     key = (call["name"], call["arguments"])
                     if key in seen_calls:
                         result = {
@@ -80,7 +88,7 @@ async def run_agent(run_id: str, history: list[dict], user_message: str, emit) -
                         }
                     else:
                         seen_calls.add(key)
-                        result = execute_tool(call["name"], call["arguments"])
+                        result = await run_tool(call["name"], call["arguments"])
                     logger.info("result=%s", result)
                     new_messages.append({"role": "tool", "tool_call_id": call["id"],
                                         "content": json.dumps(result, ensure_ascii=False)})
@@ -104,3 +112,18 @@ async def run_agent(run_id: str, history: list[dict], user_message: str, emit) -
     except Exception:
         logger.exception("run_id=%s непредвиденная ошибка", run_id)
         emit("error", {"message": "Внутренняя ошибка сервера."})
+
+
+async def run_tool(name: str, arguments: str) -> dict:
+    """функция направляет вызов в локальный инструмент или в MCP"""
+    if name == "find_submatrices":
+        return execute_tool(name, arguments)
+    if name in ALLOWED_MCP_TOOLS:
+        try:
+            args = json.loads(arguments)
+        except json.JSONDecodeError:
+            return {"error": "invalid_arguments", "message": "Аргументы — не корректный JSON."}
+        if not isinstance(args, dict):
+            return {"error": "invalid_arguments", "message": "Аргументы должны быть JSON-объектом."}
+        return await call_mcp_tool(name, args)
+    return {"error": "unknown_tool", "message": "неизвестный инструмент"}

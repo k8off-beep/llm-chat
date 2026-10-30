@@ -1,6 +1,7 @@
 import { observer } from 'mobx-react-lite'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkBreaks from "remark-breaks"
 
 function Link({ href, children }) {
   return (
@@ -18,7 +19,7 @@ const Message = observer(function Message({ message }) {
   return (
     <div className="message assistant">
       {message.text ? (
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: Link }}>
+        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={{ a: Link }}>
           {message.text}
         </ReactMarkdown>
       ) : (

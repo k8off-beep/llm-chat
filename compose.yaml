@@ -1,0 +1,103 @@
+name: llm-chat
+
+services:
+  web:
+    build: ./web
+    image: llm-chat-web:1.0
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      agent:
+        condition: service_healthy
+    restart: unless-stopped
+
+  agent:
+    build: ./agent
+    image: llm-chat-agent:1.0
+    environment:
+      LLM_URL: http://llm:8080
+      MCP_URL: http://db-mcp-server:9092/mcp
+      MCP_API_KEY: ${MCP_API_KEY:-mcp_demo_key}
+      MCP_TIMEOUT: ${MCP_TIMEOUT:-10}
+      MAX_LLM_CALLS: ${MAX_LLM_CALLS:-5}
+      MAX_TOOL_CALLS: ${MAX_TOOL_CALLS:-5}
+      RUN_TIMEOUT: ${RUN_TIMEOUT:-120}
+      MAX_CONTEXT_CHARS: ${MAX_CONTEXT_CHARS:-16000}
+      MAX_TOKENS: ${MAX_TOKENS:-1024}
+      TEMPERATURE: ${TEMPERATURE:-0}
+    depends_on:
+      llm:
+        condition: service_healthy
+      db-mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  llm:
+    build:
+      context: ./models
+      dockerfile: ../llm/Dockerfile
+    image: llm-chat-llm:1.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  db-mcp-server:
+    image: freepeak/db-mcp-server:1.14.0@sha256:6e90a44c5d1fd99e7547826031543430dccd6737def7481f9593cecf3d50889a
+    command: ["/app/server", "-t", "streamable", "-h", "0.0.0.0", "-p", "9092", "-api-key", "${MCP_API_KEY:-mcp_demo_key}"]
+    environment:
+      DB_CONFIG: >-
+          {
+            "connections": [
+              {
+                "id": "sales",
+                "type": "postgres",
+                "host": "postgres",
+                "port": 5432,
+                "name": "sales",
+                "user": "analyst",
+                "password": "${ANALYST_PASSWORD:-analyst_demo}",
+                "query_timeout": 5,
+                "max_open_conns": 5,
+                "read_only": true,
+                "max_rows": 100
+              }
+            ]
+          }
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://localhost:9092/mcp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  postgres:
+    build: ./db
+    image: llm-chat-postgres:1.0
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_demo}
+      POSTGRES_DB: sales
+      ANALYST_PASSWORD: ${ANALYST_PASSWORD:-analyst_demo}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sales"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -44,6 +44,13 @@ async def call_mcp_tool(name: str, arguments: dict) -> dict:
     """Выполняет разрешённый инструмент FreePeak. Всегда возвращает словарь."""
     if name not in ALLOWED_MCP_TOOLS:
         return {"error": "forbidden_tool", "message": "Запрещённый инструмент."}
+    if name == "query_sales":
+        query = str(arguments.get("query", "")).lstrip().lower()
+        if not query.startswith(("select", "with")):
+            return {
+                "error": "read_only",
+                "message": "Запрос должен начинаться с SELECT или WITH: разрешено только чтение данных.",
+            }
     try:
         async with asyncio.timeout(MCP_TIMEOUT):
             async with mcp_session() as session:
@@ -54,7 +61,8 @@ async def call_mcp_tool(name: str, arguments: dict) -> dict:
         return {
             "result": text,
             "hint": "Покажи пользователю все строки результата с подписями столбцов. "
-                    "Не считай суммы и итоги сам: если итога нет в результате, не пиши его.",
+                    "Период называй так же, как в условии запроса. "
+                    "После таблицы ничего не добавляй: никаких «Всего», подсчётов строк и выводов.",
         }
     except TimeoutError:
         return {"error": "mcp_timeout", "message": "Превышено время ожидания."}

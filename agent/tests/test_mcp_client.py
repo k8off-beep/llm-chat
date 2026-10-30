@@ -71,13 +71,13 @@ def test_success_returns_text(monkeypatch):
 
 
 def test_sql_error_becomes_mcp_error(monkeypatch):
-    session = FakeSession(result=mcp_result('syntax error at or near "SELEC"', is_error=True))
+    session = FakeSession(result=mcp_result('relation "nope" does not exist', is_error=True))
     patch_session(monkeypatch, session)
 
-    result = asyncio.run(mcp_client.call_mcp_tool("query_sales", {"query": "SELEC 1"}))
+    result = asyncio.run(mcp_client.call_mcp_tool("query_sales", {"query": "SELECT * FROM nope"}))
 
     assert result["error"] == "mcp_error"
-    assert "syntax error" in result["message"]
+    assert "does not exist" in result["message"]
 
 
 def test_server_down_becomes_mcp_unavailable(monkeypatch):
@@ -104,3 +104,13 @@ def test_slow_server_becomes_mcp_timeout(monkeypatch):
     result = asyncio.run(mcp_client.call_mcp_tool("query_sales", {"query": "SELECT 1"}))
 
     assert result["error"] == "mcp_timeout"
+
+
+def test_write_query_is_rejected_before_mcp(monkeypatch):
+    session = FakeSession()
+    patch_session(monkeypatch, session)
+
+    result = asyncio.run(mcp_client.call_mcp_tool("query_sales", {"query": "DELETE FROM sales"}))
+
+    assert result["error"] == "read_only"
+    assert session.calls == []

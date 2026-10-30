@@ -93,7 +93,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d sales"]
+      test: ["CMD-SHELL", "pg_isready -h localhost -U postgres -d sales"]
       interval: 5s
       timeout: 5s
       retries: 10

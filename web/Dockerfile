@@ -7,6 +7,6 @@ COPY . .
 RUN npm run build
 
 # Этап 2: Apache раздаёт сборку и проксирует /api
-FROM httpd:2.4
+FROM httpd:2.4.69
 COPY httpd.conf /usr/local/apache2/conf/httpd.conf
 COPY --from=build /app/dist /usr/local/apache2/htdocs/

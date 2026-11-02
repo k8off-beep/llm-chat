@@ -29,8 +29,12 @@
 
 ```bash
 docker load -i images.tar
-docker compose up -d
+docker compose up -d --pull never --no-build --remove-orphans
 ```
+
+--pull never — ничего не скачивать из реестра; если образа нет, сразу ошибка.
+--no-build — ничего не собирать, только готовые образы из архива.
+--remove-orphans — удалить старые контейнеры этого проекта, которых нет в compose.yaml.
 
 Открыть `http://localhost:8080`. Порт меняется переменной `WEB_PORT`.
 
@@ -109,6 +113,9 @@ sha256sum models/qwen3.5-2b-q5_k_m.gguf   # должен совпасть с х�
 | FastAPI / Uvicorn / httpx | `0.162.0` / `0.54.0` / `0.28.1` |
 | React / MobX / Vite | `19.3.1` / `7.1.3` (`mobx-react-lite 5.1.2`) / `8.3.5` |
 | Markdown | `react-markdown 10.1.0`, `remark-gfm 4.0.1`, `remark-breaks 4.0.0` |
+
+FreePeak запускается по тегу 1.14.0; digest образа в реестре — sha256:6e90…. В compose указан тег, а не digest:
+после docker load классическое хранилище Docker не сохраняет digest реестра, и запуск с --pull never не находит образ
 
 Все Python-зависимости закреплены в `agent/requirements.txt` (полный `pip freeze`),
 npm-зависимости — в `web/package.json` и `web/package-lock.json`. Тег `latest` не используется.

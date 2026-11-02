@@ -51,7 +51,7 @@ services:
     restart: unless-stopped
 
   db-mcp-server:
-    image: freepeak/db-mcp-server:1.14.0@sha256:6e90a44c5d1fd99e7547826031543430dccd6737def7481f9593cecf3d50889a
+    image: freepeak/db-mcp-server:1.14.0
     command: ["/app/server", "-t", "streamable", "-h", "0.0.0.0", "-p", "9092", "-api-key", "${MCP_API_KEY:-mcp_demo_key}"]
     environment:
       DB_CONFIG: >-
